@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>Food & Inventory Hub</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', ' system-ui', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbars and Polish */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    /* Rich Copy Box Link Styling */
+    .rich-copy-area a {
+      color: #2563eb;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      font-weight: 500;
+    }
+    .dark .rich-copy-area a {
+      color: #60a5fa;
+    }
+
+    /* Subtle pulse animation for newly added items */
+    @keyframes popIn {
+      0% { transform: scale(0.96); opacity: 0.5; }
+      70% { transform: scale(1.02); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-white pb-24">
+
+  <!-- Top Navigation & Sync Header -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800 shadow-sm">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6">
+      <div class="flex items-center justify-between h-14 sm:h-16 gap-2">
+        
+        <!-- Brand & Live Status -->
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-sm shrink-0">
+            <i class="fa-solid fa-utensils text-sm"></i>
+          </div>
+          <div class="truncate">
+            <h1 class="font-display font-bold text-base sm:text-lg leading-tight tracking-tight truncate">Food Hub</h1>
+            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span id="syncDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block"></span>
+              <span id="syncStatusText" class="truncate">Syncing Google Doc...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Navigation Tabs -->
+        <nav class="flex items-center bg-slate-100 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+          <button
+            id="tabBtnShopping"
+            onclick="switchTab('shopping')"
+            class="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
+          >
+            <i class="fa-solid fa-basket-shopping"></i>
+            <span>Shopping List</span>
+            <span id="stagingCountBadgeTop" class="hidden ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">0</span>
+          </button>
+          <button
+            id="tabBtnDinners"
+            onclick="switchTab('dinners')"
+            class="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+          >
+            <i class="fa-solid fa-hat-chef"></i>
+            <i class="fa-solid fa-fire-burner"></i>
+            <span>Making Dinners</span>
+          </button>
+        </nav>
+
+        <!-- Actions: Refresh Doc, Open Source Doc, Dark Mode -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            id="refreshBtn"
+            onclick="fetchLiveGoogleDoc(true)"
+            title="Refresh from Published Google Doc"
+            class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition active:scale-95"
+          >
+            <i id="refreshIcon" class="fa-solid fa-arrows-rotate text-xs sm:text-sm"></i>
+          </button>
+          <a
+            href="https://docs.google.com/document/d/e/2PACX-1vTE037XPJ1qv7XgmX2lypc1Kz4tIWB53GauIb3D4maXL0tXky68R6QRiVWuLvqOOFrfit6LypUj8ZE7/pub"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View Published Google Doc"
+            class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition active:scale-95"
+          >
+            <i class="fa-solid fa-arrow-up-right-from-square text-xs sm:text-sm"></i>
+          </a>
+          <button
+            onclick="toggleDarkMode()"
+            title="Toggle Light/Dark Theme"
+            class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition active:scale-95"
+          >
+            <i id="themeIcon" class="fa-solid fa-moon text-xs sm:text-sm"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-6">
+
+    <!-- Connection / Sync Diagnostic Banner (Only shown if live fetch encounters an issue) -->
+    <div id="syncAlertBanner" class="hidden rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-start gap-3">
+          <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 text-base"></i>
+          <div>
+            <p class="font-semibold">Couldn't reach Google Docs directly due to browser network/CORS restrictions.</p>
+            <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5">You can click "Retry Sync" or paste your Doc contents directly via Manual Sync.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="fetchLiveGoogleDoc(true)" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition">
+            Retry Sync
+          </button>
+          <button onclick="openManualSyncModal()" class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 text-xs font-semibold transition">
+            Manual Paste
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 1: SHOPPING LIST                       -->
+    <!-- ========================================== -->
+    <div id="tabShopping" class="space-y-8">
+
+      <!-- SECTION 1: LIVE INVENTORY (All 4 Categories Visible Simultaneously) -->
+      <section aria-labelledby="inventoryHeading" class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-6 rounded-full bg-emerald-500"></span>
+            <h2 id="inventoryHeading" class="font-display font-bold text-lg sm:text-xl tracking-tight">
+              Shopping List &amp; Current Inventory
+            </h2>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Mobile Grid Density Toggle so all 4 show side-by-side nicely on small screens -->
+            <button
+              id="gridDensityBtn"
+              onclick="toggleInventoryGridMode()"
+              class="sm:hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 shadow-sm"
+            >
+              <i class="fa-solid fa-table-cells-large text-emerald-500"></i>
+              <span id="gridDensityLabel">2×2 View</span>
+            </button>
+            <span class="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
+              Tap any item to add to bottom copy list
+            </span>
+          </div>
+        </div>
+
+        <!-- 4-Category Simultaneous Inventory Grid -->
+        <!-- Defaults to 2x2 on mobile and 4 columns on desktop so all 4 are visible at once -->
+        <div id="inventoryGrid" class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          <!-- Populated dynamically via JS for:
+               1. New List
+               2. Inventory On It's Way
+               3. Current Inventory
+               4. Prioritized Inventory -->
+        </div>
+      </section>
+
+      <!-- SECTION 2: WORK FOOD LIST & HOME FOOD LIST -->
+      <section aria-labelledby="catalogsHeading" class="space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-6 rounded-full bg-blue-500"></span>
+              <h2 id="catalogsHeading" class="font-display font-bold text-lg sm:text-xl tracking-tight">
+                Food Lists (Tap Food to Add to Bottom)
+              </h2>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Click any individual food below to send it (with its Google Docs link) to the copy box at the bottom.
+            </p>
+          </div>
+
+          <!-- Search & Quick List Filter -->
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <div class="relative flex-1 sm:w-64">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input
+                id="foodSearchInput"
+                type="text"
+                oninput="handleFoodSearch(this.value)"
+                placeholder="Filter foods or categories..."
+                class="w-full pl-8 pr-8 py-2 rounded-xl text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+              <button
+                id="clearFoodSearchBtn"
+                onclick="handleFoodSearch('')"
+                class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <i class="fa-solid fa-circle-xmark text-xs"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile Quick-Switch / Both View Toggle -->
+        <div class="flex items-center gap-1.5 sm:hidden">
+          <button onclick="setFoodListFilter('both')" id="filterListBoth" class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900 transition">
+            Show Both
+          </button>
+          <button onclick="setFoodListFilter('work')" id="filterListWork" class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 transition">
+            Work Food List
+          </button>
+          <button onclick="setFoodListFilter('home')" id="filterListHome" class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 transition">
+            Home Food List
+          </button>
+        </div>
+
+        <!-- Dual Catalog Container: Work Food List & Home Food List -->
+        <div id="catalogsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          
+          <!-- Work Food List Column -->
+          <div id="workFoodPanel" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div class="px-4 py-3.5 bg-gradient-to-r from-indigo-500/10 via-blue-500/5 to-transparent border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <i class="fa-solid fa-briefcase text-sm"></i>
+                </div>
+                <div>
+                  <h3 class="font-display font-bold text-base text-slate-900 dark:text-white leading-none">Work Food List</h3>
+                  <span id="workFoodStats" class="text-[11px] text-slate-500 dark:text-slate-400">Loading categories...</span>
+                </div>
+              </div>
+              <button onclick="toggleAllCategories('work')" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
+                Expand/Collapse
+              </button>
+            </div>
+            <div id="workFoodBody" class="p-3 sm:p-4 space-y-3">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Home Food List Column -->
+          <div id="homeFoodPanel" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div class="px-4 py-3.5 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <i class="fa-solid fa-house-chimney text-sm"></i>
+                </div>
+                <div>
+                  <h3 class="font-display font-bold text-base text-slate-900 dark:text-white leading-none">Home Food List</h3>
+                  <span id="homeFoodStats" class="text-[11px] text-slate-500 dark:text-slate-400">Loading categories...</span>
+                </div>
+              </div>
+              <button onclick="toggleAllCategories('home')" class="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline">
+                Expand/Collapse
+              </button>
+            </div>
+            <div id="homeFoodBody" class="p-3 sm:p-4 space-y-3">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 3: BOTTOM TEXT SPOT (Copy/Paste Staging with Rich Links + Undo/Redo) -->
+      <section id="bottomCopySection" aria-labelledby="bottomCopyHeading" class="pt-4 border-t-2 border-emerald-500/30 scroll-mt-20">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border-2 border-emerald-500/40 dark:border-emerald-500/30 shadow-lg overflow-hidden">
+          
+          <!-- Header & History Controls -->
+          <div class="px-4 py-3.5 bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+                <i class="fa-solid fa-paste text-sm"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h2 id="bottomCopyHeading" class="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white">
+                    Bottom Copy List
+                  </h2>
+                  <span id="bottomListCountBadge" class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                    0 items
+                  </span>
+                </div>
+                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+                  Google Docs link metadata is preserved when you copy &amp; paste into your Doc.
+                </p>
+              </div>
+            </div>
+
+            <!-- Undo / Redo / Format / Clear Toolbar -->
+            <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <!-- Undo Button -->
+              <button
+                id="undoBtn"
+                onclick="undoStaging()"
+                disabled
+                title="Undo (Ctrl+Z)"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition active:scale-95 shadow-sm"
+              >
+                <i class="fa-solid fa-rotate-left"></i>
+                <span>Undo</span>
+              </button>
+
+              <!-- Redo Button -->
+              <button
+                id="redoBtn"
+                onclick="redoStaging()"
+                disabled
+                title="Redo (Ctrl+Y)"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition active:scale-95 shadow-sm"
+              >
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Redo</span>
+              </button>
+
+              <!-- Copy Format Toggle (Plain Lines vs Bullet Points) -->
+              <button
+                id="copyFormatBtn"
+                onclick="toggleCopyFormat()"
+                title="Switch between plain lines or bulleted list for Google Docs paste"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition active:scale-95 shadow-sm"
+              >
+                <i id="copyFormatIcon" class="fa-solid fa-align-left text-emerald-500"></i>
+                <span id="copyFormatLabel">Format: Lines</span>
+              </button>
+
+              <!-- Clear All Button -->
+              <button
+                id="clearStagingBtn"
+                onclick="clearStagingList()"
+                disabled
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/70 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-40 disabled:pointer-events-none transition active:scale-95"
+              >
+                <i class="fa-solid fa-trash-can"></i>
+                <span>Clear</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Body: Removable Item Pills + Rich Copyable Text Box -->
+          <div class="p-4 space-y-4">
+            
+            <!-- Empty State -->
+            <div id="stagingEmptyState" class="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+              <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-2">
+                <i class="fa-solid fa-hand-pointer"></i>
+              </div>
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-300">No foods selected yet</p>
+              <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                Tap any food item above to drop it here for copying into your Google Doc.
+              </p>
+            </div>
+
+            <!-- Active Content (Shown when >= 1 item is in the list) -->
+            <div id="stagingActiveContent" class="hidden space-y-4">
+              
+              <!-- Quick-Remove Interactive List -->
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Tap <i class="fa-solid fa-xmark"></i> to remove any misclicked item
+                  </span>
+                </div>
+                <div id="stagingRemovableList" class="flex flex-wrap gap-2">
+                  <!-- Individual removable pills rendered here -->
+                </div>
+              </div>
+
+              <!-- Rich Text Box (Selectable & Copyable with Hyperlinks intact) -->
+              <div class="space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-link text-emerald-500"></i>
+                    <span>Rich Text Output (Select &amp; Copy, or use Copy button)</span>
+                  </label>
+                  <button
+                    onclick="copyStagingToClipboard()"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition active:scale-95"
+                  >
+                    <i class="fa-solid fa-copy"></i>
+                    <span>Copy Text + Links for Google Docs</span>
+                  </button>
+                </div>
+
+                <!-- This container renders pure clean HTML with <a href="..."> tags so manual highlight+copy OR button copy preserves Google Docs links -->
+                <div
+                  id="richCopyBox"
+                  class="rich-copy-area w-full min-h-[96px] p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-800 dark:text-slate-100 leading-relaxed select-all overflow-x-auto"
+                ></div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: MAKING DINNERS                      -->
+    <!-- ========================================== -->
+    <div id="tabDinners" class="hidden space-y-6">
+      
+      <!-- Header & Search Bar -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-6 rounded-full bg-amber-500"></span>
+            <h2 class="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white">
+              Chef Meals / Ingredients
+            </h2>
+            <span id="mealsCountBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300">
+              0 meals
+            </span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            Click a <strong>Meal Title</strong> to open its Google Docs recipe link. Tap <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 font-bold text-[10px]">i</span> to view its indented ingredients. <span class="italic opacity-80">("Working On:" is automatically hidden.)</span>
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <div class="relative flex-1 sm:w-72">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input
+              id="dinnerSearchInput"
+              type="text"
+              oninput="handleDinnerSearch(this.value)"
+              placeholder="Search meals or ingredients..."
+              class="w-full pl-9 pr-8 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500 transition"
+            />
+            <button
+              id="clearDinnerSearchBtn"
+              onclick="handleDinnerSearch('')"
+              class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <i class="fa-solid fa-circle-xmark text-xs"></i>
+            </button>
+          </div>
+          <button
+            onclick="toggleAllMealInfo()"
+            title="Expand or Collapse all Meal Ingredients"
+            class="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shrink-0 transition"
+          >
+            <i class="fa-solid fa-circle-info text-blue-500 mr-1"></i>
+            <span>Toggle All (i)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chef Meals Grid / List -->
+      <div id="chefMealsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 items-start">
+        <!-- Populated dynamically via JS -->
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Floating Mobile Bottom Quick-Bar for Shopping List Copy Box -->
+  <div
+    id="floatingBottomBar"
+    class="fixed bottom-3 inset-x-3 z-30 max-w-lg mx-auto bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-xl border border-slate-700/80 flex items-center justify-between gap-2 transition-all duration-200 translate-y-28 opacity-0 pointer-events-none"
+  >
+    <button onclick="scrollToBottomCopyBox()" class="flex items-center gap-2.5 text-left min-w-0 flex-1">
+      <span id="floatingCountCircle" class="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs flex items-center justify-center shrink-0">
+        0
+      </span>
+      <div class="truncate">
+        <p class="text-xs font-semibold leading-tight truncate">Bottom Copy List</p>
+        <p id="floatingLastAdded" class="text-[10px] text-slate-300 truncate">Tap to view or copy</p>
+      </div>
+    </button>
+
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button
+        onclick="undoStaging()"
+        id="floatingUndoBtn"
+        title="Undo"
+        class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 text-xs"
+      >
+        <i class="fa-solid fa-rotate-left"></i>
+      </button>
+      <button
+        onclick="redoStaging()"
+        id="floatingRedoBtn"
+        title="Redo"
+        class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 text-xs"
+      >
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
+      <button
+        onclick="copyStagingToClipboard()"
+        class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm"
+      >
+        <i class="fa-solid fa-copy"></i>
+        <span>Copy</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none"></div>
+
+  <!-- Manual Sync / Paste Modal (Fallback if user is offline or behind strict firewall) -->
+  <div id="manualSyncModal" class="fixed inset-0 z-50 hidden bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-pop">
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="font-display font-bold text-base sm:text-lg">Manual Google Doc Sync</h3>
+        <button onclick="closeManualSyncModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3">
+        <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+          If a browser extension or firewall blocks automatic background fetching of your published Google Doc, you can open your <a href="https://docs.google.com/document/d/e/2PACX-1vTE037XPJ1qv7XgmX2lypc1Kz4tIWB53GauIb3D4maXL0tXky68R6QRiVWuLvqOOFrfit6LypUj8ZE7/pub" target="_blank" class="text-emerald-600 underline font-medium">Published Doc</a>, press <strong>Ctrl+A</strong> then <strong>Ctrl+C</strong>, and paste it into the box below:
+        </p>
+        <div
+          id="manualPasteArea"
+          contenteditable="true"
+          class="w-full h-48 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 overflow-y-auto text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          placeholder="Paste copied Google Doc content here..."
+        ></div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button onclick="closeManualSyncModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            Cancel
+          </button>
+          <button onclick="applyManualPaste()" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white">
+            Parse Pasted Doc
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    /*************************************************************************
+     * 1. CONFIGURATION & APPLICATION STATE
+     *************************************************************************/
+    const PUBLISHED_DOC_URL = 'https://docs.google.com/document/d/e/2PACX-1vTE037XPJ1qv7XgmX2lypc1Kz4tIWB53GauIb3D4maXL0tXky68R6QRiVWuLvqOOFrfit6LypUj8ZE7/pub';
+
+    // The 4 required categories under "Shopping List"
+    const INVENTORY_CATEGORY_CONFIG = [
+      {
+        key: 'new_list',
+        title: 'New List',
+        matchers: ['new list'],
+        icon: 'fa-cart-plus',
+        accentBg: 'from-violet-500/15 to-purple-500/5',
+        borderClass: 'border-violet-200/90 dark:border-violet-900/60',
+        badgeClass: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+        iconColor: 'text-violet-600 dark:text-violet-400',
+        subtitle: 'To buy / upcoming order'
+      },
+      {
+        key: 'on_its_way',
+        title: "Inventory On It's Way",
+        matchers: ["inventory on it's way", "inventory on its way", "inventory on it’s way", "on it's way", "on its way", "on it’s way"],
+        icon: 'fa-truck-fast',
+        accentBg: 'from-sky-500/15 to-blue-500/5',
+        borderClass: 'border-sky-200/90 dark:border-sky-900/60',
+        badgeClass: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
+        iconColor: 'text-sky-600 dark:text-sky-400',
+        subtitle: 'Ordered & in transit'
+      },
+      {
+        key: 'current_inventory',
+        title: 'Current Inventory',
+        matchers: ['current inventory'],
+        icon: 'fa-boxes-stacked',
+        accentBg: 'from-emerald-500/15 to-teal-500/5',
+        borderClass: 'border-emerald-200/90 dark:border-emerald-900/60',
+        badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+        iconColor: 'text-emerald-600 dark:text-emerald-400',
+        subtitle: 'Currently stocked'
+      },
+      {
+        key: 'prioritized_inventory',
+        title: 'Prioritized Inventory',
+        matchers: ['prioritized inventory', 'priority inventory'],
+        icon: 'fa-fire-flame-curved',
+        accentBg: 'from-amber-500/15 to-orange-500/5',
+        borderClass: 'border-amber-200/90 dark:border-amber-900/60',
+        badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+        iconColor: 'text-amber-600 dark:text-amber-400',
+        subtitle: 'Eat first / priority use'
+      }
+    ];
+
+    const state = {
+      activeTab: 'shopping', // 'shopping' | 'dinners'
+      mobileInventory2x2: true, // Show 2x2 grid on mobile so all 4 show at once
+      mobileFoodListFilter: 'both', // 'both' | 'work' | 'home'
+      foodSearchQuery: '',
+      dinnerSearchQuery: '',
+      copyAsBullets: false, // false = plain lines with links, true = <ul><li> with links
+      expandedMealIds: new Set(),
+      collapsedCategories: new Set(),
+
+      // Parsed Data from Google Doc
+      docData: {
+        shoppingList: {
+          new_list: [],
+          on_its_way: [],
+          current_inventory: [],
+          prioritized_inventory: [],
+          extra: []
+        },
+        workFoodList: [], // Array of { id, categoryTitle, categoryHtml, items: [...] }
+        homeFoodList: [], // Array of { id, categoryTitle, categoryHtml, items: [...] }
+        chefMeals: []     // Array of { id, title, richHtml, primaryUrl, links, infoItems: [...] }
+      },
+
+      // Bottom Copy List with Undo / Redo History Stack
+      stagingItems: [], // Array of { uid, text, richHtml, primaryUrl, source }
+      historyStack: [[]], // Array of snapshots of stagingItems
+      historyIndex: 0
+    };
+
+    /*************************************************************************
+     * 2. LIVE GOOGLE DOC FETCHER (Direct + Multi-Proxy Race Fallback)
+     *************************************************************************/
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 8500) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timer);
+        return response;
+      } catch (err) {
+        clearTimeout(timer);
+        throw err;
+      }
+    }
+
+    function isValidGoogleDocHtml(htmlText) {
+      if (!htmlText || typeof htmlText !== 'string' || htmlText.length < 150) return false;
+      const lower = htmlText.toLowerCase();
+      return (
+        lower.includes('shopping list') ||
+        lower.includes('work food') ||
+        lower.includes('home food') ||
+        lower.includes('chef meals') ||
+        lower.includes('lst-kix_') ||
+        lower.includes('doc-content')
+      );
+    }
+
+    async function fetchStrategyDirect(cacheBust) {
+      const target = `${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`;
+      const res = await fetchWithTimeout(target, { cache: 'no-store' }, 5000);
+      if (!res.ok) throw new Error('Direct fetch non-200');
+      const text = await res.text();
+      if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
+      return text;
+    }
+
+    async function fetchStrategyAllOriginsRaw(cacheBust) {
+      const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`);
+      const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${target}`, { cache: 'no-store' }, 9000);
+      if (!res.ok) throw new Error('AllOrigins raw non-200');
+      const text = await res.text();
+      if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
+      return text;
+    }
+
+    async function fetchStrategyAllOriginsJson(cacheBust) {
+      const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`);
+      const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${target}`, { cache: 'no-store' }, 9000);
+      if (!res.ok) throw new Error('AllOrigins JSON non-200');
+      const data = await res.json();
+      if (!data || !isValidGoogleDocHtml(data.contents)) throw new Error('Invalid doc HTML');
+      return data.contents;
+    }
+
+    async function fetchStrategyCorsProxyIo(cacheBust) {
+      const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`);
+      const res = await fetchWithTimeout(`https://corsproxy.io/?${target}`, { cache: 'no-store' }, 8000);
+      if (!res.ok) throw new Error('corsproxy.io non-200');
+      const text = await res.text();
+      if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
+      return text;
+    }
+
+    async function fetchStrategyCodeTabs(cacheBust) {
+      const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true`);
+      const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${target}`, { cache: 'no-store' }, 9000);
+      if (!res.ok) throw new Error('CodeTabs non-200');
+      const text = await res.text();
+      if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
+      return text;
+    }
+
+    async function fetchLiveGoogleDoc(showToastFeedback = false) {
+      const syncDot = document.getElementById('syncDot');
+      const syncStatusText = document.getElementById('syncStatusText');
+      const refreshIcon = document.getElementById('refreshIcon');
+      const alertBanner = document.getElementById('syncAlertBanner');
+
+      syncDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block';
+      syncStatusText.textContent = 'Syncing live Doc...';
+      refreshIcon.classList.add('fa-spin');
+
+      const cacheBust = Date.now();
+
+      try {
+        let htmlString = null;
+
+        // Try fast direct fetch or race reliable proxies in parallel
+        try {
+          htmlString = await Promise.any([
+            fetchStrategyDirect(cacheBust),
+            fetchStrategyCorsProxyIo(cacheBust),
+            fetchStrategyAllOriginsJson(cacheBust),
+            fetchStrategyAllOriginsRaw(cacheBust),
+            fetchStrategyCodeTabs(cacheBust)
+          ]);
+        } catch (aggregateErr) {
+          throw new Error('All live fetch strategies failed');
+        }
+
+        // Parse the fetched Google Doc HTML
+        parseGoogleDocHtml(htmlString);
+        renderAll();
+
+        const nowTime = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        syncDot.className = 'w-2 h-2 rounded-full bg-emerald-500 inline-block';
+        syncStatusText.textContent = `Synced ${nowTime}`;
+        alertBanner.classList.add('hidden');
+
+        if (showToastFeedback) {
+          showToast('Synced latest changes from your Google Doc!', 'success');
+        }
+      } catch (err) {
+        console.warn('Live Google Doc fetch encountered an issue:', err);
+        syncDot.className = 'w-2 h-2 rounded-full bg-rose-500 inline-block';
+        syncStatusText.textContent = 'Sync blocked / offline';
+        alertBanner.classList.remove('hidden');
+        renderAll();
+      } finally {
+        refreshIcon.classList.remove('fa-spin');
+      }
+    }
+
+    /*************************************************************************
+     * 3. GOOGLE DOCS HTML PARSER (Preserves Links, Indentation & Sections)
+     *************************************************************************/
+
+    /**
+     * Unwraps Google's redirect URL wrapper:
+     * https://www.google.com/url?q=ACTUAL_URL&sa=D&source=editors...
+     */
+    function unwrapGoogleRedirectUrl(rawHref) {
+      if (!rawHref) return '';
+      let href = rawHref.trim();
+      try {
+        const parsed = new URL(href, window.location.origin);
+        if (
+          (parsed.hostname === 'www.google.com' || parsed.hostname === 'google.com') &&
+          parsed.pathname === '/url'
+        ) {
+          return parsed.searchParams.get('q') || parsed.searchParams.get('url') || href;
+        }
+      } catch (e) {
+        // Fallback regex extraction if URL constructor fails
+        const match = href.match(/[?&](?:q|url)=([^&]+)/i);
+        if (match && match[1]) {
+          try {
+            return decodeURIComponent(match[1]);
+          } catch (_) {}
+        }
+      }
+      return href;
+    }
+
+    /**
+     * Normalizes text for case-insensitive section & category matching
+     */
+    function normalizeHeadingText(str) {
+      if (!str) return '';
+      return str
+        .replace(/[\u00a0\s]+/g, ' ')
+        .replace(/[’‘]/g, "'")
+        .trim()
+        .replace(/:+$/, '')
+        .trim()
+        .toLowerCase();
+    }
+
+    /**
+     * Extracts CSS margin-left rules from Google Docs <style> blocks
+     * as a backup indentation detector.
+     */
+    function extractClassIndentMap(doc) {
+      const classIndentMap = {};
+      const styleTags = doc.querySelectorAll('style');
+      styleTags.forEach(styleEl => {
+        const cssText = styleEl.textContent || '';
+        const ruleRegex = /\.(c\d+|li-bullet-\d+)\s*\{([^}]*)\}/g;
+        let match;
+        while ((match = ruleRegex.exec(cssText)) !== null) {
+          const className = match[1];
+          const body = match[2];
+          const marginMatch = body.match(/margin-left\s*:\s*([\d.]+)\s*(pt|px)/i);
+          if (marginMatch) {
+            const val = parseFloat(marginMatch[1]);
+            const unit = marginMatch[2].toLowerCase();
+            const ptVal = unit === 'px' ? val * 0.75 : val;
+            // In Google Docs, base bullet is 36pt, each indent adds 36pt
+            const computedLevel = Math.max(0, Math.round((ptVal - 36) / 36));
+            classIndentMap[className] = computedLevel;
+          }
+        }
+      });
+      return classIndentMap;
+    }
+
+    /**
+     * Determines the 0-based indentation level of a Google Docs <li> element.
+     * Google Docs published HTML assigns `lst-kix_<id>-<level>` to the parent <ul>/<ol>.
+     */
+    function getBulletIndentLevel(liEl, classIndentMap = {}) {
+      // 1. Check parent <ul> / <ol> or <li> class for `lst-kix_...-<level>`
+      const parentList = liEl.closest('ul, ol');
+      const combinedClasses = `${parentList ? parentList.className : ''} ${liEl.className || ''}`;
+      const kixMatch = combinedClasses.match(/lst-[a-zA-Z0-9_-]+-(\d+)\b/);
+      if (kixMatch && kixMatch[1] !== undefined) {
+        return parseInt(kixMatch[1], 10);
+      }
+
+      // 2. Check DOM nesting depth of <ul> / <ol>
+      let depth = 0;
+      let curr = liEl.parentElement;
+      while (curr) {
+        if (curr.tagName === 'UL' || curr.tagName === 'OL') {
+          depth++;
+        }
+        curr = curr.parentElement;
+      }
+      if (depth > 1) {
+        return depth - 1;
+      }
+
+      // 3. Check inline style or Google Docs CSS class margin-left
+      const liClasses = (liEl.className || '').split(/\s+/);
+      for (const cls of liClasses) {
+        if (classIndentMap[cls] !== undefined) {
+          return classIndentMap[cls];
+        }
+      }
+
+      return 0;
+    }
+
+    /**
+     * Extracts clean plain text, sanitized rich HTML (with unwrapped <a href="..."> links),
+     * and link metadata from an element (excluding any nested <ul>/<ol> children).
+     */
+    function extractRichItemData(element) {
+      const clone = element.cloneNode(true);
+      // Remove any nested lists if standard nested HTML is present
+      clone.querySelectorAll('ul, ol').forEach(nested => nested.remove());
+
+      const links = [];
+
+      // Recursively build clean HTML preserving links and basic text formatting
+      function serializeCleanNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.nodeValue.replace(/\u00a0/g, ' ');
+          return escapeHtml(text);
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+        const tag = node.tagName.toLowerCase();
+        let inner = '';
+        node.childNodes.forEach(child => {
+          inner += serializeCleanNode(child);
+        });
+
+        if (tag === 'a') {
+          const rawHref = node.getAttribute('href') || '';
+          const cleanUrl = unwrapGoogleRedirectUrl(rawHref);
+          const linkText = (node.textContent || '').replace(/\u00a0/g, ' ').trim();
+          if (cleanUrl && linkText) {
+            links.push({ text: linkText, url: cleanUrl });
+            return `<a href="${escapeAttr(cleanUrl)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+          }
+          return inner;
+        }
+
+        if (tag === 'b' || tag === 'strong') {
+          return `<strong>${inner}</strong>`;
+        }
+        if (tag === 'i' || tag === 'em') {
+          return `<em>${inner}</em>`;
+        }
+        if (tag === 'u') {
+          return `<u>${inner}</u>`;
+        }
+        if (tag === 'br') {
+          return ' ';
+        }
+
+        return inner;
+      }
+
+      let richHtml = serializeCleanNode(clone).trim();
+
+      // Merge adjacent <a> tags that point to the exact same URL (a common Google Docs export quirk)
+      richHtml = richHtml.replace(
+        /<\/a>(\s*)<a href="([^"]+)" target="_blank" rel="noopener noreferrer">/g,
+        (fullMatch, space, nextHref) => {
+          return fullMatch; // Handled below via DOM normalization
+        }
+      );
+
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = richHtml;
+      const anchors = Array.from(tempDiv.querySelectorAll('a'));
+      for (let i = 0; i < anchors.length - 1; i++) {
+        const currentA = anchors[i];
+        const nextA = anchors[i + 1];
+        if (
+          currentA.getAttribute('href') === nextA.getAttribute('href') &&
+          currentA.nextSibling === nextA
+        ) {
+          while (nextA.firstChild) {
+            currentA.appendChild(nextA.firstChild);
+          }
+          nextA.remove();
+        }
+      }
+      richHtml = tempDiv.innerHTML.trim();
+
+      const plainText = (clone.textContent || '').replace(/[\u00a0\s]+/g, ' ').trim();
+      const primaryUrl = links.length > 0 ? links[0].url : null;
+
+      return {
+        text: plainText,
+        richHtml: richHtml || escapeHtml(plainText),
+        primaryUrl,
+        links
+      };
+    }
+
+    /**
+     * Converts a flat list of { level, text, richHtml, primaryUrl, links } into a hierarchical tree
+     */
+    function buildHierarchyTree(flatBullets) {
+      if (!flatBullets || flatBullets.length === 0) return [];
+      const rootNodes = [];
+      const stack = [];
+
+      flatBullets.forEach((bullet, idx) => {
+        const node = {
+          id: `node_${idx}_${Math.random().toString(36).slice(2, 7)}`,
+          text: bullet.text,
+          richHtml: bullet.richHtml,
+          primaryUrl: bullet.primaryUrl,
+          links: bullet.links || [],
+          level: bullet.level,
+          children: []
+        };
+
+        while (stack.length > 0 && stack[stack.length - 1].level >= node.level) {
+          stack.pop();
+        }
+
+        if (stack.length === 0) {
+          rootNodes.push(node);
+        } else {
+          stack[stack.length - 1].children.push(node);
+        }
+
+        stack.push(node);
+      });
+
+      return rootNodes;
+    }
+
+    /**
+     * Flattens all descendant nodes of a category/section while preserving relative depth
+     */
+    function flattenDescendants(nodes, relativeDepth = 0, result = []) {
+      nodes.forEach(node => {
+        result.push({
+          ...node,
+          relativeDepth
+        });
+        if (node.children && node.children.length > 0) {
+          flattenDescendants(node.children, relativeDepth + 1, result);
+        }
+      });
+      return result;
+    }
+
+    /**
+     * Main parser for the published Google Doc HTML
+     */
+    function parseGoogleDocHtml(htmlString) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, 'text/html');
+
+      const classIndentMap = extractClassIndentMap(doc);
+
+      // Remove Google Docs published header/footer banners if present
+      const headerBanner = doc.getElementById('header');
+      if (headerBanner) headerBanner.remove();
+      const footerBanner = doc.getElementById('footer');
+      if (footerBanner) footerBanner.remove();
+
+      const contentRoot =
+        doc.getElementById('contents') ||
+        doc.querySelector('.doc-content') ||
+        doc.body;
+
+      // Buckets for raw bullet items per section
+      const sectionBullets = {
+        shopping_list: [],
+        work_food: [],
+        home_food: [],
+        chef_meals: []
+      };
+
+      let currentSection = null;
+      let ignoreChefMealsSubtreeLevel = null;
+      let ignoreRestOfChefMeals = false;
+
+      // Helper to check if a text string matches one of the 4 main section headers
+      function detectMainSection(normText) {
+        if (!normText) return null;
+        if (normText === 'shopping list' || normText === 'shopping list:') {
+          return 'shopping_list';
+        }
+        if (normText === 'work food list' || normText === 'work food' || normText === 'work foods') {
+          return 'work_food';
+        }
+        if (normText === 'home food list' || normText === 'home food' || normText === 'home foods') {
+          return 'home_food';
+        }
+        if (
+          normText === 'chef meals / ingredients' ||
+          normText === 'chef meals/ingredients' ||
+          normText === 'chef meals & ingredients' ||
+          normText === 'chef meals'
+        ) {
+          return 'chef_meals';
+        }
+        return null;
+      }
+
+      // Helper to check if a top-level bullet is one of the 4 Shopping List categories
+      function isShoppingCategoryTitle(normText) {
+        return INVENTORY_CATEGORY_CONFIG.some(cat =>
+          cat.matchers.some(m => normText === m || normText.startsWith(m + ' ('))
+        );
+      }
+
+      // Walk all relevant block elements in document order
+      const blocks = contentRoot.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li');
+
+      blocks.forEach(el => {
+        // Avoid double-counting <p> inside <li> if Google Docs ever nests <p> in <li>
+        if (el.tagName !== 'LI' && el.closest('li')) {
+          return;
+        }
+
+        const itemData = extractRichItemData(el);
+        if (!itemData.text) return;
+
+        const normText = normalizeHeadingText(itemData.text);
+
+        // Check if this block is a main section header ("Shopping List", "Work Food List", "Home Food List", "Chef Meals / Ingredients")
+        const matchedSection = detectMainSection(normText);
+        if (matchedSection) {
+          currentSection = matchedSection;
+          ignoreChefMealsSubtreeLevel = null;
+          ignoreRestOfChefMeals = false;
+          return;
+        }
+
+        // Fallback: if the doc starts directly with "New List" or "Current Inventory" before an explicit "Shopping List" paragraph
+        if (!currentSection && isShoppingCategoryTitle(normText)) {
+          currentSection = 'shopping_list';
+        }
+
+        // Check for "Working On:" inside "Chef Meals / Ingredients"
+        if (currentSection === 'chef_meals') {
+          const isWorkingOnHeader =
+            normText === 'working on' ||
+            normText.startsWith('working on:') ||
+            normText === 'working on list';
+
+          if (el.tagName !== 'LI') {
+            if (isWorkingOnHeader) {
+              ignoreRestOfChefMeals = true;
+              return;
+            }
+          } else {
+            const bulletLevel = getBulletIndentLevel(el, classIndentMap);
+            if (isWorkingOnHeader) {
+              ignoreChefMealsSubtreeLevel = bulletLevel;
+              return;
+            }
+            if (ignoreChefMealsSubtreeLevel !== null) {
+              if (bulletLevel > ignoreChefMealsSubtreeLevel) {
+                // Indented underneath "Working On:", ignore!
+                return;
+              } else {
+                // Back to same or higher level than "Working On:"
+                ignoreChefMealsSubtreeLevel = null;
+              }
+            }
+            if (ignoreRestOfChefMeals) {
+              return;
+            }
+          }
+        }
+
+        // Process bullet items (<li>)
+        if (el.tagName === 'LI' && currentSection) {
+          const level = getBulletIndentLevel(el, classIndentMap);
+          sectionBullets[currentSection].push({
+            ...itemData,
+            level
+          });
+        }
+      });
+
+      // 1. Structure "Shopping List" (4 Inventory Categories)
+      const shoppingTree = buildHierarchyTree(sectionBullets.shopping_list);
+      const parsedShopping = {
+        new_list: [],
+        on_its_way: [],
+        current_inventory: [],
+        prioritized_inventory: [],
+        extra: []
+      };
+
+      shoppingTree.forEach(rootNode => {
+        const norm = normalizeHeadingText(rootNode.text);
+        const matchedCat = INVENTORY_CATEGORY_CONFIG.find(cat =>
+          cat.matchers.some(m => norm === m || norm.startsWith(m))
+        );
+        if (matchedCat) {
+          parsedShopping[matchedCat.key].push(...rootNode.children);
+        } else {
+          parsedShopping.extra.push(rootNode);
+        }
+      });
+
+      // 2. Structure "Work Food List" (Category -> Indented Foods)
+      const workTree = buildHierarchyTree(sectionBullets.work_food);
+      const parsedWorkFood = workTree.map((catNode, idx) => ({
+        id: `work_cat_${idx}`,
+        categoryTitle: catNode.text,
+        categoryHtml: catNode.richHtml,
+        items: flattenDescendants(catNode.children, 0)
+      }));
+
+      // 3. Structure "Home Food List" (Category -> Indented Foods)
+      const homeTree = buildHierarchyTree(sectionBullets.home_food);
+      const parsedHomeFood = homeTree.map((catNode, idx) => ({
+        id: `home_cat_${idx}`,
+        categoryTitle: catNode.text,
+        categoryHtml: catNode.richHtml,
+        items: flattenDescendants(catNode.children, 0)
+      }));
+
+      // 4. Structure "Chef Meals / Ingredients" (Meal Title + Link -> Indented Info/Ingredients)
+      const mealsTree = buildHierarchyTree(sectionBullets.chef_meals);
+      const parsedChefMeals = mealsTree
+        .filter(mealNode => {
+          const norm = normalizeHeadingText(mealNode.text);
+          return norm !== 'working on' && !norm.startsWith('working on:');
+        })
+        .map((mealNode, idx) => ({
+          id: `meal_${idx}`,
+          title: mealNode.text,
+          richHtml: mealNode.richHtml,
+          primaryUrl: mealNode.primaryUrl,
+          links: mealNode.links || [],
+          infoItems: flattenDescendants(mealNode.children, 0)
+        }));
+
+      state.docData = {
+        shoppingList: parsedShopping,
+        workFoodList: parsedWorkFood,
+        homeFoodList: parsedHomeFood,
+        chefMeals: parsedChefMeals
+      };
+    }
+
+    /*************************************************************************
+     * 4. UI RENDERING FUNCTIONS
+     *************************************************************************/
+    function renderAll() {
+      renderInventorySection();
+      renderFoodCatalogs();
+      renderBottomStagingArea();
+      renderChefMealsTab();
+    }
+
+    /**
+     * Renders the 4 Shopping List / Inventory categories simultaneously
+     */
+    function renderInventorySection() {
+      const grid = document.getElementById('inventoryGrid');
+      if (!grid) return;
+
+      // Apply mobile 2x2 vs 1-col class while always keeping lg:grid-cols-4
+      grid.className = state.mobileInventory2x2
+        ? 'grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4'
+        : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4';
+
+      const cardsHtml = INVENTORY_CATEGORY_CONFIG.map(cat => {
+        const rawTreeItems = state.docData.shoppingList[cat.key] || [];
+        const flatItems = flattenDescendants(rawTreeItems, 0);
+
+        const itemsHtml =
+          flatItems.length === 0
+            ? `<div class="py-5 text-center text-xs text-slate-400 dark:text-slate-500 italic">
+                 Empty right now
+               </div>`
+            : `<ul class="space-y-1.5">
+                 ${flatItems
+                   .map(item => {
+                     const indentClass =
+                       item.relativeDepth > 0
+                         ? `ml-${Math.min(item.relativeDepth * 3, 6)} pl-2 border-l-2 border-slate-200 dark:border-slate-700 text-[11px] sm:text-xs`
+                         : 'text-xs sm:text-sm';
+                     const hasLink = Boolean(item.primaryUrl);
+
+                     return `
+                       <li class="${indentClass} group flex items-start justify-between gap-1.5 p-1.5 rounded-lg hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition cursor-pointer"
+                           onclick="addItemToStaging(${escapeSingleQuoteJson({
+                             text: item.text,
+                             richHtml: item.richHtml,
+                             primaryUrl: item.primaryUrl,
+                             source: cat.title
+                           })})"
+                           title="Tap to add to Bottom Copy List"
+                       >
+                         <div class="flex items-start gap-1.5 min-w-0 flex-1">
+                           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 mt-1.5 shrink-0 group-hover:bg-emerald-500 transition"></span>
+                           <span class="text-slate-800 dark:text-slate-200 font-medium break-words leading-snug">
+                             ${escapeHtml(item.text)}
+                           </span>
+                         </div>
+                         <div class="flex items-center gap-1 shrink-0">
+                           ${
+                             hasLink
+                               ? `<a href="${escapeAttr(item.primaryUrl)}"
+                                     target="_blank"
+                                     rel="noopener noreferrer"
+                                     onclick="event.stopPropagation()"
+                                     title="Open Link in New Tab"
+                                     class="p-1 rounded text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition"
+                                  >
+                                    <i class="fa-solid fa-link text-[10px]"></i>
+                                  </a>`
+                               : ''
+                           }
+                         </div>
+                       </li>
+                     `;
+                   })
+                   .join('')}
+               </ul>`;
+
+        return `
+          <div class="bg-white dark:bg-slate-900 rounded-2xl border ${cat.borderClass} shadow-sm flex flex-col overflow-hidden">
+            <div class="p-2.5 sm:p-3.5 bg-gradient-to-br ${cat.accentBg} border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1.5">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/90 dark:bg-slate-900/90 shadow-sm flex items-center justify-center ${cat.iconColor} shrink-0">
+                  <i class="fa-solid ${cat.icon} text-xs sm:text-sm"></i>
+                </div>
+                <div class="min-w-0">
+                  <h3 class="font-display font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-tight truncate" title="${escapeAttr(cat.title)}">
+                    ${escapeHtml(cat.title)}
+                  </h3>
+                  <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate hidden sm:block">${escapeHtml(cat.subtitle)}</p>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${cat.badgeClass} shrink-0">
+                ${flatItems.length}
+              </span>
+            </div>
+            <div class="p-2 sm:p-3 flex-1 max-h-64 sm:max-h-80 overflow-y-auto">
+              ${itemsHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      grid.innerHTML = cardsHtml;
+    }
+
+    /**
+     * Renders both "Work Food List" and "Home Food List" with their Categories and Indented Foods
+     */
+    function renderFoodCatalogs() {
+      const workBody = document.getElementById('workFoodBody');
+      const homeBody = document.getElementById('homeFoodBody');
+      const workStats = document.getElementById('workFoodStats');
+      const homeStats = document.getElementById('homeFoodStats');
+
+      const query = state.foodSearchQuery.trim().toLowerCase();
+
+      // Count how many times an item is in the bottom staging list for visual feedback
+      const stagingCountMap = {};
+      state.stagingItems.forEach(st => {
+        stagingCountMap[st.text] = (stagingCountMap[st.text] || 0) + 1;
+      });
+
+      function renderCatalogColumn(categories, listPrefix, accentColor) {
+        let totalItems = 0;
+        categories.forEach(c => (totalItems += c.items.length));
+
+        const filteredCategories = categories
+          .map(cat => {
+            if (!query) return cat;
+            const catMatches = cat.categoryTitle.toLowerCase().includes(query);
+            if (catMatches) return cat;
+            const matchingItems = cat.items.filter(item =>
+              item.text.toLowerCase().includes(query)
+            );
+            return { ...cat, items: matchingItems };
+          })
+          .filter(cat => !query || cat.items.length > 0 || cat.categoryTitle.toLowerCase().includes(query));
+
+        if (filteredCategories.length === 0) {
+          return {
+            statsText: `${categories.length} categories • ${totalItems} foods`,
+            html: `<div class="py-8 text-center text-xs sm:text-sm text-slate-400 dark:text-slate-500">
+                     No matching foods found.
+                   </div>`
+          };
+        }
+
+        const html = filteredCategories
+          .map(cat => {
+            const isCollapsed = state.collapsedCategories.has(cat.id) && !query;
+            const badgeColor =
+              accentColor === 'indigo'
+                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300'
+                : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300';
+
+            const foodsHtml =
+              cat.items.length === 0
+                ? `<p class="text-xs text-slate-400 italic px-2 py-1">No foods listed under this category</p>`
+                : `<div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-2">
+                     ${cat.items
+                       .map(food => {
+                         const countInStaging = stagingCountMap[food.text] || 0;
+                         const hasLink = Boolean(food.primaryUrl);
+                         const subIndent =
+                           food.relativeDepth > 0 ? 'ml-3 border-l-2 border-slate-200 dark:border-slate-700' : '';
+
+                         return `
+                           <div class="${subIndent} group relative flex items-center justify-between gap-2 px-3 py-2 rounded-xl border ${
+                             countInStaging > 0
+                               ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400/70 dark:border-emerald-600/60'
+                               : 'bg-slate-50/80 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 border-slate-200/70 dark:border-slate-700/60'
+                           } transition cursor-pointer select-none active:scale-[0.98]"
+                           onclick="addItemToStaging(${escapeSingleQuoteJson({
+                             text: food.text,
+                             richHtml: food.richHtml,
+                             primaryUrl: food.primaryUrl,
+                             source: `${listPrefix} • ${cat.categoryTitle}`
+                           })})"
+                           >
+                             <div class="flex items-center gap-2 min-w-0 flex-1">
+                               <span class="w-5 h-5 rounded-lg flex items-center justify-center text-[11px] shrink-0 ${
+                                 countInStaging > 0
+                                   ? 'bg-emerald-600 text-white font-bold'
+                                   : 'bg-white dark:bg-slate-900 text-slate-400 group-hover:text-emerald-600 border border-slate-200 dark:border-slate-700'
+                               } transition">
+                                 ${countInStaging > 0 ? countInStaging : '<i class="fa-solid fa-plus"></i>'}
+                               </span>
+                               <span class="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 leading-snug break-words">
+                                 ${escapeHtml(food.text)}
+                               </span>
+                             </div>
+
+                             <div class="flex items-center gap-1 shrink-0">
+                               ${
+                                 hasLink
+                                   ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60" title="Has Google Docs Link Metadata">
+                                        <i class="fa-solid fa-link"></i>
+                                      </span>
+                                      <a href="${escapeAttr(food.primaryUrl)}"
+                                         target="_blank"
+                                         rel="noopener noreferrer"
+                                         onclick="event.stopPropagation()"
+                                         title="Open product link in new tab"
+                                         class="p-1 rounded-md text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-900 transition"
+                                      >
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                                      </a>`
+                                   : ''
+                               }
+                             </div>
+                           </div>
+                         `;
+                       })
+                       .join('')}
+                   </div>`;
+
+            return `
+              <div class="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3">
+                <button
+                  onclick="toggleCategoryCollapse('${cat.id}')"
+                  class="w-full flex items-center justify-between gap-2 text-left"
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <i class="fa-solid ${
+                      isCollapsed ? 'fa-chevron-right' : 'fa-chevron-down'
+                    } text-xs text-slate-400 transition-transform"></i>
+                    <h4 class="font-display font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
+                      ${escapeHtml(cat.categoryTitle)}
+                    </h4>
+                  </div>
+                  <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${badgeColor}">
+                    ${cat.items.length}
+                  </span>
+                </button>
+                ${isCollapsed ? '' : foodsHtml}
+              </div>
+            `;
+          })
+          .join('');
+
+        return {
+          statsText: `${categories.length} categories • ${totalItems} foods`,
+          html
+        };
+      }
+
+      const workRender = renderCatalogColumn(state.docData.workFoodList, 'Work', 'indigo');
+      const homeRender = renderCatalogColumn(state.docData.homeFoodList, 'Home', 'emerald');
+
+      workStats.textContent = workRender.statsText;
+      workBody.innerHTML = workRender.html;
+
+      homeStats.textContent = homeRender.statsText;
+      homeBody.innerHTML = homeRender.html;
+    }
+
+    /**
+     * Renders the Bottom Text Spot (Removable pills, Undo/Redo buttons, and Rich Link HTML Copy Box)
+     */
+    function renderBottomStagingArea() {
+      const items = state.stagingItems;
+      const count = items.length;
+
+      // Top & Section Badges
+      const topBadge = document.getElementById('stagingCountBadgeTop');
+      const sectionBadge = document.getElementById('bottomListCountBadge');
+      const floatingBar = document.getElementById('floatingBottomBar');
+      const floatingCount = document.getElementById('floatingCountCircle');
+      const floatingLastAdded = document.getElementById('floatingLastAdded');
+
+      if (count > 0) {
+        topBadge.textContent = count;
+        topBadge.classList.remove('hidden');
+      } else {
+        topBadge.classList.add('hidden');
+      }
+
+      sectionBadge.textContent = `${count} ${count === 1 ? 'item' : 'items'}`;
+      floatingCount.textContent = count;
+
+      if (count > 0 && state.activeTab === 'shopping') {
+        const lastItem = items[items.length - 1];
+        floatingLastAdded.textContent = `Added: ${lastItem.text}`;
+        floatingBar.classList.remove('translate-y-28', 'opacity-0', 'pointer-events-none');
+      } else {
+        floatingBar.classList.add('translate-y-28', 'opacity-0', 'pointer-events-none');
+      }
+
+      // Undo / Redo / Clear buttons state
+      const canUndo = state.historyIndex > 0;
+      const canRedo = state.historyIndex < state.historyStack.length - 1;
+
+      document.getElementById('undoBtn').disabled = !canUndo;
+      document.getElementById('redoBtn').disabled = !canRedo;
+      document.getElementById('floatingUndoBtn').disabled = !canUndo;
+      document.getElementById('floatingRedoBtn').disabled = !canRedo;
+      document.getElementById('clearStagingBtn').disabled = count === 0;
+
+      const emptyState = document.getElementById('stagingEmptyState');
+      const activeContent = document.getElementById('stagingActiveContent');
+      const removableList = document.getElementById('stagingRemovableList');
+      const richCopyBox = document.getElementById('richCopyBox');
+
+      if (count === 0) {
+        emptyState.classList.remove('hidden');
+        activeContent.classList.add('hidden');
+        removableList.innerHTML = '';
+        richCopyBox.innerHTML = '';
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      activeContent.classList.remove('hidden');
+
+      // 1. Render interactive removable chips
+      removableList.innerHTML = items
+        .map(
+          (item, idx) => `
+          <div class="animate-pop inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm">
+            <div class="flex items-center gap-1.5">
+              ${
+                item.primaryUrl
+                  ? `<i class="fa-solid fa-link text-[11px] text-blue-500" title="Link attached"></i>`
+                  : ''
+              }
+              <span>${escapeHtml(item.text)}</span>
+            </div>
+            <button
+              onclick="removeItemFromStaging('${item.uid}')"
+              title="Remove this item"
+              class="w-6 h-6 rounded-lg bg-slate-200/80 hover:bg-rose-500 hover:text-white dark:bg-slate-700 dark:hover:bg-rose-600 text-slate-500 dark:text-slate-300 flex items-center justify-center transition"
+            >
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        `
+        )
+        .join('');
+
+      // 2. Render the Rich HTML Box for direct selection or 1-click Google Docs copy
+      if (state.copyAsBullets) {
+        richCopyBox.innerHTML = `<ul style="list-style-type: disc; padding-left: 1.25rem; margin: 0;">${items
+          .map(item => `<li style="margin-bottom: 2px;">${item.richHtml}</li>`)
+          .join('')}</ul>`;
+      } else {
+        richCopyBox.innerHTML = items
+          .map(item => `<div>${item.richHtml}</div>`)
+          .join('');
+      }
+    }
+
+    /**
+     * Renders the "Making Dinners" Tab ("Chef Meals / Ingredients", ignoring "Working On:")
+     */
+    function renderChefMealsTab() {
+      const container = document.getElementById('chefMealsContainer');
+      const badge = document.getElementById('mealsCountBadge');
+      if (!container) return;
+
+      const meals = state.docData.chefMeals || [];
+      badge.textContent = `${meals.length} ${meals.length === 1 ? 'meal' : 'meals'}`;
+
+      const query = state.dinnerSearchQuery.trim().toLowerCase();
+      const filteredMeals = meals.filter(meal => {
+        if (!query) return true;
+        const titleMatch = meal.title.toLowerCase().includes(query);
+        const ingMatch = meal.infoItems.some(info =>
+          info.text.toLowerCase().includes(query)
+        );
+        return titleMatch || ingMatch;
+      });
+
+      if (filteredMeals.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <i class="fa-solid fa-utensils text-2xl text-slate-300 dark:text-slate-600 mb-2"></i>
+            <p class="text-sm font-medium text-slate-600 dark:text-slate-300">No meals match your search.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filteredMeals
+        .map(meal => {
+          const isExpanded = state.expandedMealIds.has(meal.id) || Boolean(query);
+          const hasLink = Boolean(meal.primaryUrl);
+          const ingredientCount = meal.infoItems.length;
+
+          // Title element: Clicking the Title opens the embedded link from Google Docs
+          const titleElementHtml = hasLink
+            ? `<a href="${escapeAttr(meal.primaryUrl)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="group/link flex items-center gap-2 text-left font-display font-bold text-sm sm:text-base text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition min-w-0 flex-1"
+                  title="Open Recipe Doc in New Tab"
+               >
+                 <span class="underline decoration-amber-500/50 group-hover/link:decoration-amber-500 underline-offset-4 break-words leading-snug">
+                   ${escapeHtml(meal.title)}
+                 </span>
+                 <i class="fa-solid fa-arrow-up-right-from-square text-xs text-amber-500 shrink-0 opacity-80 group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition"></i>
+               </a>`
+            : `<div class="font-display font-bold text-sm sm:text-base text-slate-900 dark:text-white break-words leading-snug flex-1">
+                 ${meal.richHtml}
+               </div>`;
+
+          // Indented Ingredients / Info Drawer shown when clicking "(i)"
+          const infoDrawerHtml = isExpanded
+            ? `<div class="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/50 animate-pop">
+                 <div class="flex items-center justify-between mb-2">
+                   <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                     <i class="fa-solid fa-carrot text-amber-500"></i>
+                     <span>Ingredients &amp; Meal Info (${ingredientCount})</span>
+                   </span>
+                   ${
+                     ingredientCount > 0
+                       ? `<button
+                            onclick="addAllMealIngredientsToStaging('${meal.id}')"
+                            class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                            title="Send these ingredients to the Shopping List copy box"
+                          >
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add all to Shopping List</span>
+                          </button>`
+                       : ''
+                   }
+                 </div>
+                 ${
+                   ingredientCount === 0
+                     ? `<p class="text-xs text-slate-400 italic">No additional info indented underneath this meal.</p>`
+                     : `<ul class="space-y-1.5">
+                          ${meal.infoItems
+                            .map(info => {
+                              const subPad =
+                                info.relativeDepth > 0
+                                  ? `ml-${Math.min(info.relativeDepth * 4, 8)} pl-2 border-l-2 border-amber-300 dark:border-amber-800`
+                                  : '';
+                              return `
+                                <li class="${subPad} flex items-center justify-between gap-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
+                                  <div class="flex items-start gap-2 min-w-0 flex-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></span>
+                                    <span class="rich-copy-area break-words leading-snug">${info.richHtml}</span>
+                                  </div>
+                                  <button
+                                    onclick="addItemToStaging(${escapeSingleQuoteJson({
+                                      text: info.text,
+                                      richHtml: info.richHtml,
+                                      primaryUrl: info.primaryUrl,
+                                      source: meal.title
+                                    })})"
+                                    title="Add this ingredient to Shopping List bottom box"
+                                    class="px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-emerald-500 hover:text-white dark:bg-slate-800 dark:hover:bg-emerald-600 text-slate-600 dark:text-slate-300 transition shrink-0"
+                                  >
+                                    + List
+                                  </button>
+                                </li>
+                              `;
+                            })
+                            .join('')}
+                        </ul>`
+                 }
+               </div>`
+            : '';
+
+          return `
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden transition hover:border-amber-400/60 dark:hover:border-amber-500/50">
+              <div class="p-3.5 sm:p-4 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  <div class="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-200/60 dark:border-amber-800/50">
+                    <i class="fa-solid fa-utensils text-sm"></i>
+                  </div>
+                  ${titleElementHtml}
+                </div>
+
+                <!-- "(i)" Info Button at the end of the row -->
+                <button
+                  onclick="toggleMealInfo('${meal.id}')"
+                  aria-expanded="${isExpanded}"
+                  title="Show indented meal info / ingredients"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 ${
+                    isExpanded
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                      : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/80 dark:hover:bg-blue-900/70 text-blue-600 dark:text-blue-300 border border-blue-200/70 dark:border-blue-800/70'
+                  }"
+                >
+                  <span>(i)</span>
+                  <span class="text-[11px] opacity-80">${ingredientCount}</span>
+                </button>
+              </div>
+              ${infoDrawerHtml}
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    /*************************************************************************
+     * 5. INTERACTIONS, UNDO/REDO HISTORY & RICH CLIPBOARD COPY
+     *************************************************************************/
+
+    function pushHistorySnapshot(newStagingItems) {
+      // Truncate any redo branch after current historyIndex
+      state.historyStack = state.historyStack.slice(0, state.historyIndex + 1);
+      // Deep clone items
+      const snapshot = newStagingItems.map(item => ({ ...item }));
+      state.historyStack.push(snapshot);
+      state.historyIndex = state.historyStack.length - 1;
+      state.stagingItems = snapshot.map(item => ({ ...item }));
+      renderAll();
+    }
+
+    function addItemToStaging(itemPayload) {
+      const newItem = {
+        uid: `st_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        text: itemPayload.text,
+        richHtml: itemPayload.richHtml || escapeHtml(itemPayload.text),
+        primaryUrl: itemPayload.primaryUrl || null,
+        source: itemPayload.source || ''
+      };
+      const updated = [...state.stagingItems, newItem];
+      pushHistorySnapshot(updated);
+      showToast(`Added "${itemPayload.text}" to bottom list`, 'info');
+    }
+
+    function addAllMealIngredientsToStaging(mealId) {
+      const meal = state.docData.chefMeals.find(m => m.id === mealId);
+      if (!meal || !meal.infoItems.length) return;
+      const newEntries = meal.infoItems.map(info => ({
+        uid: `st_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        text: info.text,
+        richHtml: info.richHtml || escapeHtml(info.text),
+        primaryUrl: info.primaryUrl || null,
+        source: meal.title
+      }));
+      pushHistorySnapshot([...state.stagingItems, ...newEntries]);
+      showToast(`Added ${newEntries.length} ingredients from "${meal.title}"`, 'success');
+    }
+
+    function removeItemFromStaging(uid) {
+      const target = state.stagingItems.find(i => i.uid === uid);
+      const updated = state.stagingItems.filter(i => i.uid !== uid);
+      pushHistorySnapshot(updated);
+      if (target) {
+        showToast(`Removed "${target.text}"`, 'neutral');
+      }
+    }
+
+    function clearStagingList() {
+      if (state.stagingItems.length === 0) return;
+      pushHistorySnapshot([]);
+      showToast('Cleared bottom list (Click Undo to restore)', 'neutral');
+    }
+
+    function undoStaging() {
+      if (state.historyIndex <= 0) return;
+      state.historyIndex--;
+      state.stagingItems = state.historyStack[state.historyIndex].map(i => ({ ...i }));
+      renderAll();
+      showToast('Undid last action', 'neutral');
+    }
+
+    function redoStaging() {
+      if (state.historyIndex >= state.historyStack.length - 1) return;
+      state.historyIndex++;
+      state.stagingItems = state.historyStack[state.historyIndex].map(i => ({ ...i }));
+      renderAll();
+      showToast('Redid action', 'neutral');
+    }
+
+    function toggleCopyFormat() {
+      state.copyAsBullets = !state.copyAsBullets;
+      const label = document.getElementById('copyFormatLabel');
+      const icon = document.getElementById('copyFormatIcon');
+      if (state.copyAsBullets) {
+        label.textContent = 'Format: Bullets';
+        icon.className = 'fa-solid fa-list-ul text-emerald-500';
+      } else {
+        label.textContent = 'Format: Lines';
+        icon.className = 'fa-solid fa-align-left text-emerald-500';
+      }
+      renderBottomStagingArea();
+    }
+
+    /**
+     * Copies the bottom staging list to the system clipboard as BOTH `text/html` and `text/plain`
+     * so pasting into Google Docs preserves all embedded `<a href="...">` links!
+     */
+    async function copyStagingToClipboard() {
+      if (state.stagingItems.length === 0) {
+        showToast('Add some food items first!', 'neutral');
+        return;
+      }
+
+      // Build clean HTML and Plain Text payloads for Google Docs
+      const htmlLines = state.copyAsBullets
+        ? `<ul>${state.stagingItems.map(i => `<li>${i.richHtml}</li>`).join('')}</ul>`
+        : state.stagingItems.map(i => `<p style="margin:0;">${i.richHtml}</p>`).join('');
+
+      const plainLines = state.stagingItems.map(i => i.text).join('\n');
+
+      let copiedRichSuccess = false;
+
+      // Method 1: Select DOM range of a temporary rich HTML container and run document.execCommand('copy')
+      // Works reliably inside iframes and mobile browsers and places text/html + text/plain on the clipboard
+      try {
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'fixed';
+        tempContainer.style.left = '-9999px';
+        tempContainer.style.top = '0';
+        tempContainer.style.opacity = '0';
+        tempContainer.innerHTML = htmlLines;
+        document.body.appendChild(tempContainer);
+
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(tempContainer);
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        copiedRichSuccess = document.execCommand('copy');
+        selection.removeAllRanges();
+        document.body.removeChild(tempContainer);
+      } catch (err) {
+        console.warn('DOM Range execCommand copy fallback error:', err);
+      }
+
+      // Method 2: Also attempt modern ClipboardItem API if available
+      if (!copiedRichSuccess && navigator.clipboard && window.ClipboardItem) {
+        try {
+          const htmlBlob = new Blob([htmlLines], { type: 'text/html' });
+          const textBlob = new Blob([plainLines], { type: 'text/plain' });
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/html': htmlBlob,
+              'text/plain': textBlob
+            })
+          ]);
+          copiedRichSuccess = true;
+        } catch (clipErr) {
+          console.warn('ClipboardItem API fallback error:', clipErr);
+        }
+      }
+
+      if (copiedRichSuccess) {
+        showToast(
+          `Copied ${state.stagingItems.length} ${
+            state.stagingItems.length === 1 ? 'item' : 'items'
+          } with Google Docs links!`,
+          'success'
+        );
+      } else {
+        // Highlight the visible richCopyBox so the user can press Ctrl+C / Copy directly
+        const box = document.getElementById('richCopyBox');
+        const range = document.createRange();
+        range.selectNodeContents(box);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        showToast('Text selected! Press Copy to paste with links.', 'info');
+      }
+    }
+
+    /*************************************************************************
+     * 6. TAB SWITCHING, FILTERS, & UI HELPERS
+     *************************************************************************/
+    function switchTab(tabName) {
+      state.activeTab = tabName;
+      const tabShopping = document.getElementById('tabShopping');
+      const tabDinners = document.getElementById('tabDinners');
+      const btnShopping = document.getElementById('tabBtnShopping');
+      const btnDinners = document.getElementById('tabBtnDinners');
+
+      const activeClasses =
+        'flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm';
+      const inactiveClasses =
+        'flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200';
+
+      if (tabName === 'shopping') {
+        tabShopping.classList.remove('hidden');
+        tabDinners.classList.add('hidden');
+        btnShopping.className = activeClasses;
+        btnDinners.className = inactiveClasses;
+      } else {
+        tabShopping.classList.add('hidden');
+        tabDinners.classList.remove('hidden');
+        btnShopping.className = inactiveClasses;
+        btnDinners.className =
+          'flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm';
+      }
+
+      renderBottomStagingArea();
+    }
+
+    function toggleInventoryGridMode() {
+      state.mobileInventory2x2 = !state.mobileInventory2x2;
+      const label = document.getElementById('gridDensityLabel');
+      label.textContent = state.mobileInventory2x2 ? '2×2 View' : 'Stacked View';
+      renderInventorySection();
+    }
+
+    function setFoodListFilter(mode) {
+      state.mobileFoodListFilter = mode;
+      const workPanel = document.getElementById('workFoodPanel');
+      const homePanel = document.getElementById('homeFoodPanel');
+      const btnBoth = document.getElementById('filterListBoth');
+      const btnWork = document.getElementById('filterListWork');
+      const btnHome = document.getElementById('filterListHome');
+
+      const activeClass =
+        'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900 transition';
+      const inactiveClass =
+        'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 transition';
+
+      btnBoth.className = mode === 'both' ? activeClass : inactiveClass;
+      btnWork.className = mode === 'work' ? activeClass : inactiveClass;
+      btnHome.className = mode === 'home' ? activeClass : inactiveClass;
+
+      if (mode === 'both') {
+        workPanel.classList.remove('hidden');
+        homePanel.classList.remove('hidden');
+      } else if (mode === 'work') {
+        workPanel.classList.remove('hidden');
+        homePanel.classList.add('hidden');
+      } else {
+        workPanel.classList.add('hidden');
+        homePanel.classList.remove('hidden');
+      }
+    }
+
+    function handleFoodSearch(val) {
+      state.foodSearchQuery = val;
+      const input = document.getElementById('foodSearchInput');
+      if (input.value !== val) input.value = val;
+      document
+        .getElementById('clearFoodSearchBtn')
+        .classList.toggle('hidden', !val);
+      renderFoodCatalogs();
+    }
+
+    function handleDinnerSearch(val) {
+      state.dinnerSearchQuery = val;
+      const input = document.getElementById('dinnerSearchInput');
+      if (input.value !== val) input.value = val;
+      document
+        .getElementById('clearDinnerSearchBtn')
+        .classList.toggle('hidden', !val);
+      renderChefMealsTab();
+    }
+
+    function toggleCategoryCollapse(catId) {
+      if (state.collapsedCategories.has(catId)) {
+        state.collapsedCategories.delete(catId);
+      } else {
+        state.collapsedCategories.add(catId);
+      }
+      renderFoodCatalogs();
+    }
+
+    function toggleAllCategories(whichList) {
+      const list =
+        whichList === 'work'
+          ? state.docData.workFoodList
+          : state.docData.homeFoodList;
+      const allCollapsed = list.every(c => state.collapsedCategories.has(c.id));
+      list.forEach(c => {
+        if (allCollapsed) {
+          state.collapsedCategories.delete(c.id);
+        } else {
+          state.collapsedCategories.add(c.id);
+        }
+      });
+      renderFoodCatalogs();
+    }
+
+    function toggleMealInfo(mealId) {
+      if (state.expandedMealIds.has(mealId)) {
+        state.expandedMealIds.delete(mealId);
+      } else {
+        state.expandedMealIds.add(mealId);
+      }
+      renderChefMealsTab();
+    }
+
+    function toggleAllMealInfo() {
+      const meals = state.docData.chefMeals || [];
+      const allExpanded =
+        meals.length > 0 && meals.every(m => state.expandedMealIds.has(m.id));
+      if (allExpanded) {
+        state.expandedMealIds.clear();
+      } else {
+        meals.forEach(m => state.expandedMealIds.add(m.id));
+      }
+      renderChefMealsTab();
+    }
+
+    function scrollToBottomCopyBox() {
+      const el = document.getElementById('bottomCopySection');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function openManualSyncModal() {
+      document.getElementById('manualSyncModal').classList.remove('hidden');
+    }
+
+    function closeManualSyncModal() {
+      document.getElementById('manualSyncModal').classList.add('hidden');
+    }
+
+    function applyManualPaste() {
+      const pasteArea = document.getElementById('manualPasteArea');
+      const htmlContent = pasteArea.innerHTML;
+      if (!htmlContent || htmlContent.trim().length < 10) {
+        showToast('Please paste your Google Doc content first.', 'neutral');
+        return;
+      }
+      parseGoogleDocHtml(htmlContent);
+      renderAll();
+      closeManualSyncModal();
+      document.getElementById('syncAlertBanner').classList.add('hidden');
+      document.getElementById('syncDot').className =
+        'w-2 h-2 rounded-full bg-emerald-500 inline-block';
+      document.getElementById('syncStatusText').textContent = 'Synced via paste';
+      showToast('Parsed pasted Google Doc successfully!', 'success');
+    }
+
+    function toggleDarkMode() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      const icon = document.getElementById('themeIcon');
+      icon.className = isDark
+        ? 'fa-solid fa-sun text-amber-400 text-xs sm:text-sm'
+        : 'fa-solid fa-moon text-xs sm:text-sm';
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+
+      const styleMap = {
+        success: 'bg-emerald-600 text-white border-emerald-500',
+        info: 'bg-slate-900 dark:bg-slate-800 text-white border-slate-700',
+        neutral: 'bg-slate-800 text-slate-200 border-slate-700'
+      };
+
+      toast.className = `animate-pop pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-xl border shadow-lg text-xs font-semibold ${
+        styleMap[type] || styleMap.info
+      }`;
+      toast.innerHTML = `
+        <i class="fa-solid ${
+          type === 'success' ? 'fa-circle-check' : 'fa-bolt text-emerald-400'
+        }"></i>
+        <span class="truncate">${escapeHtml(message)}</span>
+      `;
+
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => toast.remove(), 250);
+      }, 2200);
+    }
+
+    /*************************************************************************
+     * 7. STRING ESCAPING UTILITIES & KEYBOARD SHORTCUTS
+     *************************************************************************/
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str);
+    }
+
+    function escapeSingleQuoteJson(obj) {
+      return JSON.stringify(obj)
+        .replace(/&/g, '&amp;')
+        .replace(/'/g, '&#39;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // Support Ctrl+Z / Cmd+Z and Ctrl+Y / Cmd+Shift+Z for Undo/Redo on the bottom staging list
+    window.addEventListener('keydown', e => {
+      if (state.activeTab !== 'shopping') return;
+      const activeTag = document.activeElement ? document.activeElement.tagName : '';
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || document.activeElement?.isContentEditable) {
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          redoStaging();
+        } else {
+          e.preventDefault();
+          undoStaging();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redoStaging();
+      }
+    });
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+        document.getElementById('themeIcon').className =
+          'fa-solid fa-sun text-amber-400 text-xs sm:text-sm';
+      }
+      renderAll();
+      fetchLiveGoogleDoc(false);
+    });
+  </script>
+</body>
+</html>
