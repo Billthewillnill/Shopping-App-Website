@@ -702,7 +702,7 @@
     /*************************************************************************
      * 2. LIVE GOOGLE DOC FETCHER (Direct + Multi-Proxy Race Fallback)
      *************************************************************************/
-    async function fetchWithTimeout(url, options = {}, timeoutMs = 8500) {
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 11000) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -730,7 +730,7 @@
 
     async function fetchStrategyDirect(cacheBust) {
       const target = `${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`;
-      const res = await fetchWithTimeout(target, { cache: 'no-store' }, 5000);
+      const res = await fetchWithTimeout(target, { cache: 'no-store' }, 6000);
       if (!res.ok) throw new Error('Direct fetch non-200');
       const text = await res.text();
       if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
@@ -739,7 +739,7 @@
 
     async function fetchStrategyAllOriginsRaw(cacheBust) {
       const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`);
-      const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${target}`, { cache: 'no-store' }, 9000);
+      const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${target}`, { cache: 'no-store' }, 12000);
       if (!res.ok) throw new Error('AllOrigins raw non-200');
       const text = await res.text();
       if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
@@ -748,7 +748,7 @@
 
     async function fetchStrategyAllOriginsJson(cacheBust) {
       const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`);
-      const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${target}`, { cache: 'no-store' }, 9000);
+      const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${target}`, { cache: 'no-store' }, 12000);
       if (!res.ok) throw new Error('AllOrigins JSON non-200');
       const data = await res.json();
       if (!data || !isValidGoogleDocHtml(data.contents)) throw new Error('Invalid doc HTML');
@@ -757,7 +757,7 @@
 
     async function fetchStrategyCorsProxyIo(cacheBust) {
       const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true&_cb=${cacheBust}`);
-      const res = await fetchWithTimeout(`https://corsproxy.io/?${target}`, { cache: 'no-store' }, 8000);
+      const res = await fetchWithTimeout(`https://corsproxy.io/?${target}`, { cache: 'no-store' }, 11000);
       if (!res.ok) throw new Error('corsproxy.io non-200');
       const text = await res.text();
       if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
@@ -766,7 +766,7 @@
 
     async function fetchStrategyCodeTabs(cacheBust) {
       const target = encodeURIComponent(`${PUBLISHED_DOC_URL}?embedded=true`);
-      const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${target}`, { cache: 'no-store' }, 9000);
+      const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${target}`, { cache: 'no-store' }, 12000);
       if (!res.ok) throw new Error('CodeTabs non-200');
       const text = await res.text();
       if (!isValidGoogleDocHtml(text)) throw new Error('Invalid doc HTML');
@@ -784,24 +784,29 @@
       refreshIcon.classList.add('fa-spin');
 
       const cacheBust = Date.now();
+      let htmlString = null;
 
       try {
-        let htmlString = null;
+        // Race direct fetch and multiple CORS proxies in parallel
+        htmlString = await Promise.any([
+          fetchStrategyDirect(cacheBust),
+          fetchStrategyCorsProxyIo(cacheBust),
+          fetchStrategyAllOriginsJson(cacheBust),
+          fetchStrategyAllOriginsRaw(cacheBust),
+          fetchStrategyCodeTabs(cacheBust)
+        ]);
+      } catch (networkErr) {
+        console.warn('Live Google Doc network fetch encountered an issue:', networkErr);
+        syncDot.className = 'w-2 h-2 rounded-full bg-rose-500 inline-block';
+        syncStatusText.textContent = 'Sync blocked / offline';
+        alertBanner.classList.remove('hidden');
+        refreshIcon.classList.remove('fa-spin');
+        renderAll();
+        return;
+      }
 
-        // Try fast direct fetch or race reliable proxies in parallel
-        try {
-          htmlString = await Promise.any([
-            fetchStrategyDirect(cacheBust),
-            fetchStrategyCorsProxyIo(cacheBust),
-            fetchStrategyAllOriginsJson(cacheBust),
-            fetchStrategyAllOriginsRaw(cacheBust),
-            fetchStrategyCodeTabs(cacheBust)
-          ]);
-        } catch (aggregateErr) {
-          throw new Error('All live fetch strategies failed');
-        }
-
-        // Parse the fetched Google Doc HTML
+      try {
+        // Parse the fetched Google Doc HTML and update UI
         parseGoogleDocHtml(htmlString);
         renderAll();
 
@@ -813,12 +818,8 @@
         if (showToastFeedback) {
           showToast('Synced latest changes from your Google Doc!', 'success');
         }
-      } catch (err) {
-        console.warn('Live Google Doc fetch encountered an issue:', err);
-        syncDot.className = 'w-2 h-2 rounded-full bg-rose-500 inline-block';
-        syncStatusText.textContent = 'Sync blocked / offline';
-        alertBanner.classList.remove('hidden');
-        renderAll();
+      } catch (parseOrRenderErr) {
+        console.error('Error parsing or rendering Google Doc:', parseOrRenderErr);
       } finally {
         refreshIcon.classList.remove('fa-spin');
       }
@@ -870,15 +871,15 @@
     }
 
     /**
-     * Extracts CSS margin-left rules from Google Docs <style> blocks
-     * as a backup indentation detector.
+     * Extracts CSS margin-left / padding-left rules from Google Docs <style> blocks
+     * as an additional indentation detector alongside lst-kix_<id>-<level>.
      */
     function extractClassIndentMap(doc) {
       const classIndentMap = {};
       const styleTags = doc.querySelectorAll('style');
       styleTags.forEach(styleEl => {
         const cssText = styleEl.textContent || '';
-        const ruleRegex = /\.(c\d+|li-bullet-\d+)\s*\{([^}]*)\}/g;
+        const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]*)\}/g;
         let match;
         while ((match = ruleRegex.exec(cssText)) !== null) {
           const className = match[1];
@@ -888,9 +889,11 @@
             const val = parseFloat(marginMatch[1]);
             const unit = marginMatch[2].toLowerCase();
             const ptVal = unit === 'px' ? val * 0.75 : val;
-            // In Google Docs, base bullet is 36pt, each indent adds 36pt
-            const computedLevel = Math.max(0, Math.round((ptVal - 36) / 36));
-            classIndentMap[className] = computedLevel;
+            if (ptVal >= 30) {
+              // In Google Docs, base level-0 bullet is 36pt, each indent adds 36pt
+              const computedLevel = Math.max(0, Math.round((ptVal - 36) / 36));
+              classIndentMap[className] = computedLevel;
+            }
           }
         }
       });
@@ -899,15 +902,19 @@
 
     /**
      * Determines the 0-based indentation level of a Google Docs <li> element.
-     * Google Docs published HTML assigns `lst-kix_<id>-<level>` to the parent <ul>/<ol>.
+     * Combines `lst-kix_<id>-<level>`, DOM nesting depth, and CSS margin-left.
      */
     function getBulletIndentLevel(liEl, classIndentMap = {}) {
+      let kixLevel = 0;
+      let domLevel = 0;
+      let cssLevel = 0;
+
       // 1. Check parent <ul> / <ol> or <li> class for `lst-kix_...-<level>`
       const parentList = liEl.closest('ul, ol');
       const combinedClasses = `${parentList ? parentList.className : ''} ${liEl.className || ''}`;
       const kixMatch = combinedClasses.match(/lst-[a-zA-Z0-9_-]+-(\d+)\b/);
       if (kixMatch && kixMatch[1] !== undefined) {
-        return parseInt(kixMatch[1], 10);
+        kixLevel = parseInt(kixMatch[1], 10);
       }
 
       // 2. Check DOM nesting depth of <ul> / <ol>
@@ -920,18 +927,30 @@
         curr = curr.parentElement;
       }
       if (depth > 1) {
-        return depth - 1;
+        domLevel = depth - 1;
       }
 
-      // 3. Check inline style or Google Docs CSS class margin-left
-      const liClasses = (liEl.className || '').split(/\s+/);
-      for (const cls of liClasses) {
-        if (classIndentMap[cls] !== undefined) {
-          return classIndentMap[cls];
+      // 3. Check Google Docs CSS class margin-left on <li> and parent <ul>
+      const allClasses = combinedClasses.split(/\s+/).filter(Boolean);
+      for (const cls of allClasses) {
+        if (classIndentMap[cls] !== undefined && classIndentMap[cls] > cssLevel) {
+          cssLevel = classIndentMap[cls];
         }
       }
 
-      return 0;
+      // 4. Check inline style margin-left if pasted manually
+      const inlineMargin = (liEl.style && liEl.style.marginLeft) || (parentList && parentList.style && parentList.style.marginLeft) || '';
+      const inlineMatch = inlineMargin.match(/([\d.]+)\s*(pt|px)/i);
+      if (inlineMatch) {
+        const val = parseFloat(inlineMatch[1]);
+        const ptVal = inlineMatch[2].toLowerCase() === 'px' ? val * 0.75 : val;
+        if (ptVal >= 30) {
+          const inlineComputed = Math.max(0, Math.round((ptVal - 36) / 36));
+          if (inlineComputed > cssLevel) cssLevel = inlineComputed;
+        }
+      }
+
+      return Math.max(kixLevel, domLevel, cssLevel);
     }
 
     /**
@@ -988,14 +1007,6 @@
 
       let richHtml = serializeCleanNode(clone).trim();
 
-      // Merge adjacent <a> tags that point to the exact same URL (a common Google Docs export quirk)
-      richHtml = richHtml.replace(
-        /<\/a>(\s*)<a href="([^"]+)" target="_blank" rel="noopener noreferrer">/g,
-        (fullMatch, space, nextHref) => {
-          return fullMatch; // Handled below via DOM normalization
-        }
-      );
-
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = richHtml;
       const anchors = Array.from(tempDiv.querySelectorAll('a'));
@@ -1026,7 +1037,7 @@
     }
 
     /**
-     * Converts a flat list of { level, text, richHtml, primaryUrl, links } into a hierarchical tree
+     * Converts a flat list of { level, text, richHtml, primaryUrl, links, isIgnored } into a hierarchical tree
      */
     function buildHierarchyTree(flatBullets) {
       if (!flatBullets || flatBullets.length === 0) return [];
@@ -1041,6 +1052,7 @@
           primaryUrl: bullet.primaryUrl,
           links: bullet.links || [],
           level: bullet.level,
+          isIgnored: Boolean(bullet.isIgnored),
           children: []
         };
 
@@ -1051,6 +1063,10 @@
         if (stack.length === 0) {
           rootNodes.push(node);
         } else {
+          // If parent is ignored (e.g. "Working On:" or "Things To Try / Figure Out"), mark child ignored too
+          if (stack[stack.length - 1].isIgnored) {
+            node.isIgnored = true;
+          }
           stack[stack.length - 1].children.push(node);
         }
 
@@ -1061,10 +1077,11 @@
     }
 
     /**
-     * Flattens all descendant nodes of a category/section while preserving relative depth
+     * Flattens all non-ignored descendant nodes of a category/section while preserving relative depth
      */
     function flattenDescendants(nodes, relativeDepth = 0, result = []) {
       nodes.forEach(node => {
+        if (node.isIgnored) return;
         result.push({
           ...node,
           relativeDepth
@@ -1138,14 +1155,12 @@
        * Finds a bookmark URL associated with a section heading element (or its adjacent siblings)
        */
       function resolveSectionBookmarkUrl(headingEl, itemData) {
-        // 1. If the heading itself has an explicit <a href="..."> link
         if (itemData && itemData.primaryUrl) {
           return itemData.primaryUrl.startsWith('#')
             ? `${PUBLISHED_DOC_URL}${itemData.primaryUrl}`
             : itemData.primaryUrl;
         }
 
-        // 2. Look for <a id="id.xxx">, <a name="id.xxx">, or id="h.xxx" inside the heading or adjacent elements
         const candidates = [
           headingEl,
           ...Array.from(headingEl.querySelectorAll('[id], [name]')),
@@ -1175,10 +1190,8 @@
 
       let currentSection = null;
       let ignoreSubtreeLevel = null;
-      let ignoreRestOfCurrentSection = false;
 
       // Helper to check if a text string matches one of the 4 main section headers
-      // Also extracts any inline description if written on the same line
       function detectMainSection(normText, rawItemData) {
         if (!normText) return null;
 
@@ -1209,14 +1222,20 @@
         return null;
       }
 
-      // Helper to check if a bullet/heading is "Things To Try / Figure Out" or "Working On:"
+      // Helper to check if a bullet/heading is "Working On:" or "Things To Try / Figure Out"
       function isIgnoredSubSectionHeader(normText, sectionKey) {
         if (!normText) return false;
         if (sectionKey === 'chef_meals') {
           return (
             normText === 'working on' ||
             normText.startsWith('working on:') ||
-            normText === 'working on list'
+            normText.startsWith('working on ') ||
+            normText.startsWith('working on-') ||
+            normText.startsWith('working on/') ||
+            normText.includes('working on:') ||
+            normText === 'working on list' ||
+            normText === 'currently working on' ||
+            normText === 'meals working on'
           );
         }
         if (sectionKey === 'work_food' || sectionKey === 'home_food') {
@@ -1259,7 +1278,6 @@
         if (matchedSectionObj) {
           currentSection = matchedSectionObj.sectionKey;
           ignoreSubtreeLevel = null;
-          ignoreRestOfCurrentSection = false;
 
           if (currentSection === 'work_food' || currentSection === 'home_food') {
             sectionBookmarkUrls[currentSection] = resolveSectionBookmarkUrl(el, itemData);
@@ -1277,72 +1295,68 @@
 
         if (!currentSection) return;
 
-        // Check for ignored subsections:
-        // - "Working On:" inside "Chef Meals / Ingredients"
-        // - "Things To Try / Figure Out" inside "Work Food List" and "Home Food List"
-        if (
-          currentSection === 'chef_meals' ||
-          currentSection === 'work_food' ||
-          currentSection === 'home_food'
-        ) {
-          const shouldIgnoreHeader = isIgnoredSubSectionHeader(normText, currentSection);
+        const shouldIgnoreHeader = isIgnoredSubSectionHeader(normText, currentSection);
 
-          if (el.tagName !== 'LI') {
-            if (shouldIgnoreHeader) {
-              ignoreRestOfCurrentSection = true;
-              return;
-            }
+        // Handle non-bullet paragraphs (<p>, <h1>..<h6>)
+        if (el.tagName !== 'LI') {
+          if (shouldIgnoreHeader) {
+            // Push a synthetic level-0 ignored node so any indented bullets underneath it are absorbed & ignored
+            ignoreSubtreeLevel = 0;
+            sectionBullets[currentSection].push({
+              ...itemData,
+              level: 0,
+              isIgnored: true
+            });
+            return;
+          }
+
+          if (currentSection === 'work_food' || currentSection === 'home_food') {
+            sectionDescriptions[currentSection].push(itemData.richHtml);
+          }
+          return;
+        }
+
+        // Process bullet items (<li>)
+        const level = getBulletIndentLevel(el, classIndentMap);
+
+        if (shouldIgnoreHeader) {
+          ignoreSubtreeLevel = level;
+          // Keep as an ignored parent node in sectionBullets so buildHierarchyTree attaches all indented children under it
+          sectionBullets[currentSection].push({
+            ...itemData,
+            level,
+            isIgnored: true
+          });
+          return;
+        }
+
+        let isUnderIgnoredSubtree = false;
+        if (ignoreSubtreeLevel !== null) {
+          if (level > ignoreSubtreeLevel) {
+            isUnderIgnoredSubtree = true;
           } else {
-            const bulletLevel = getBulletIndentLevel(el, classIndentMap);
-            if (shouldIgnoreHeader) {
-              ignoreSubtreeLevel = bulletLevel;
-              return;
-            }
-            if (ignoreSubtreeLevel !== null) {
-              if (bulletLevel > ignoreSubtreeLevel) {
-                // Indented underneath "Things To Try / Figure Out" or "Working On:", ignore!
-                return;
-              } else {
-                // Returned to same or higher level, stop ignoring
-                ignoreSubtreeLevel = null;
-              }
-            }
-            if (ignoreRestOfCurrentSection) {
-              return;
-            }
+            // Returned to same or higher (un-indented) level -> no longer under "Working On:" or "Things To Try / Figure Out"
+            ignoreSubtreeLevel = null;
           }
         }
 
-        // Capture non-bullet paragraphs (<p>, <h1>..<h6>) inside Work Food List or Home Food List as their Description!
+        // If in Work Food List or Home Food List, check if an indented bullet is placed right under the title as a description before any level-0 food bullets
         if (
-          el.tagName !== 'LI' &&
+          !isUnderIgnoredSubtree &&
           (currentSection === 'work_food' || currentSection === 'home_food') &&
-          !ignoreRestOfCurrentSection
+          sectionBullets[currentSection].length === 0 &&
+          level > 0 &&
+          !itemData.primaryUrl
         ) {
           sectionDescriptions[currentSection].push(itemData.richHtml);
           return;
         }
 
-        // Process bullet items (<li>)
-        if (el.tagName === 'LI' && currentSection) {
-          const level = getBulletIndentLevel(el, classIndentMap);
-
-          // If in Work Food List or Home Food List, check if an indented bullet is placed right under the title as a description before any level-0 food bullets
-          if (
-            (currentSection === 'work_food' || currentSection === 'home_food') &&
-            sectionBullets[currentSection].length === 0 &&
-            level > 0 &&
-            !itemData.primaryUrl
-          ) {
-            sectionDescriptions[currentSection].push(itemData.richHtml);
-            return;
-          }
-
-          sectionBullets[currentSection].push({
-            ...itemData,
-            level
-          });
-        }
+        sectionBullets[currentSection].push({
+          ...itemData,
+          level,
+          isIgnored: isUnderIgnoredSubtree
+        });
       });
 
       // 1. Structure "Shopping List" (4 Inventory Categories)
@@ -1368,12 +1382,11 @@
       });
 
       // 2. Structure "Work Food List" & "Home Food List"
-      // Foods in Work Food List and Home Food List are un-indented bullets!
       function extractFoodListAndDescription(rawBullets, descLines) {
         const bulletsCopy = [...rawBullets];
 
         // If no <p> description was found, check if the very first bullet is a plain-text description sentence
-        if (descLines.length === 0 && bulletsCopy.length > 0) {
+        if (descLines.length === 0 && bulletsCopy.length > 0 && !bulletsCopy[0].isIgnored) {
           const first = bulletsCopy[0];
           const looksLikeDescription =
             !first.primaryUrl &&
@@ -1407,13 +1420,23 @@
         sectionDescriptions.home_food
       );
 
-      // 3. Structure "Chef Meals / Ingredients" (Meal Title + Link -> Indented Info/Ingredients)
+      // 3. Structure "Chef Meals / Ingredients"
+      // Only show foods that are NOT "Working On:" and NOT indented below "Working On:"
       const mealsTree = buildHierarchyTree(sectionBullets.chef_meals);
-      const parsedChefMeals = mealsTree
-        .filter(mealNode => {
-          const norm = normalizeHeadingText(mealNode.text);
-          return norm !== 'working on' && !norm.startsWith('working on:');
-        })
+      const nonIgnoredRootMeals = mealsTree.filter(mealNode => {
+        if (mealNode.isIgnored) return false;
+        const norm = normalizeHeadingText(mealNode.text);
+        return !isIgnoredSubSectionHeader(norm, 'chef_meals');
+      });
+
+      // Determine the top un-indented bullet level for meals (typically 0)
+      const minMealLevel =
+        nonIgnoredRootMeals.length > 0
+          ? Math.min(...nonIgnoredRootMeals.map(m => m.level))
+          : 0;
+
+      const parsedChefMeals = nonIgnoredRootMeals
+        .filter(mealNode => mealNode.level <= minMealLevel)
         .map((mealNode, idx) => ({
           id: `meal_${idx}`,
           title: mealNode.text,
@@ -1443,6 +1466,102 @@
       renderFoodCatalogs();
       renderBottomStagingArea();
       renderChefMealsTab();
+    }
+
+    /**
+     * Renders the 4 Shopping List Inventory Categories simultaneously:
+     * New List, Inventory On It's Way, Current Inventory, Prioritized Inventory
+     */
+    function renderInventorySection() {
+      const grid = document.getElementById('inventoryGrid');
+      if (!grid) return;
+
+      grid.className = state.mobileInventory2x2
+        ? 'grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4'
+        : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4';
+
+      const shoppingData = state.docData.shoppingList || {};
+
+      grid.innerHTML = INVENTORY_CATEGORY_CONFIG.map(cat => {
+        const rootItems = shoppingData[cat.key] || [];
+        const flatItems = flattenDescendants(rootItems, 0);
+        const count = flatItems.length;
+
+        const itemsHtml =
+          count === 0
+            ? `<div class="py-6 text-center text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 italic">
+                 Empty right now
+               </div>`
+            : `<ul class="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
+                 ${flatItems
+                   .map(item => {
+                     const indentClass =
+                       item.relativeDepth > 0
+                         ? 'ml-3 pl-2 border-l-2 border-slate-200 dark:border-slate-700 text-[11px] sm:text-xs'
+                         : 'text-xs sm:text-sm';
+                     const hasLink = Boolean(item.primaryUrl);
+
+                     return `
+                       <li
+                         onclick="addItemToStaging(${escapeSingleQuoteJson({
+                           text: item.text,
+                           richHtml: item.richHtml,
+                           primaryUrl: item.primaryUrl,
+                           source: cat.title
+                         })})"
+                         title="Tap to add to bottom copy list"
+                         class="${indentClass} group flex items-start justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50/90 hover:bg-emerald-50/80 dark:bg-slate-800/60 dark:hover:bg-emerald-950/40 border border-slate-200/70 dark:border-slate-700/60 cursor-pointer transition select-none active:scale-[0.98]"
+                       >
+                         <div class="flex items-start gap-1.5 min-w-0 flex-1">
+                           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 group-hover:bg-emerald-500 mt-1.5 shrink-0 transition"></span>
+                           <span class="font-medium text-slate-800 dark:text-slate-100 leading-snug break-words">
+                             ${escapeHtml(item.text)}
+                           </span>
+                         </div>
+                         ${
+                           hasLink
+                             ? `<a
+                                  href="${escapeAttr(item.primaryUrl)}"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onclick="event.stopPropagation()"
+                                  title="Open item link"
+                                  class="text-blue-500 hover:text-blue-600 dark:text-blue-400 p-0.5 shrink-0"
+                                >
+                                  <i class="fa-solid fa-link text-[10px]"></i>
+                                </a>`
+                             : ''
+                         }
+                       </li>
+                     `;
+                   })
+                   .join('')}
+               </ul>`;
+
+        return `
+          <div class="bg-white dark:bg-slate-900 rounded-2xl border ${cat.borderClass} shadow-sm flex flex-col overflow-hidden">
+            <div class="px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r ${cat.accentBg} border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1.5">
+              <div class="flex items-center gap-2 min-w-0">
+                <i class="fa-solid ${cat.icon} ${cat.iconColor} text-xs sm:text-sm shrink-0"></i>
+                <div class="min-w-0">
+                  <h3 class="font-display font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate leading-tight">
+                    ${escapeHtml(cat.title)}
+                  </h3>
+                  <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate hidden sm:block">
+                    ${escapeHtml(cat.subtitle)}
+                  </p>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${cat.badgeClass} shrink-0">
+                ${count}
+              </span>
+            </div>
+            <div class="p-2.5 sm:p-3.5 flex-1">
+              ${itemsHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     /**
